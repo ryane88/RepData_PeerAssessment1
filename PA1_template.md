@@ -3,6 +3,8 @@
 
 ## Loading and preprocessing the data
 
+I have decided to load the file directly from the listed source. Extraction and reading of the unzipped is done in the working directory. 
+
 ```r
 myurl <- ("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip")
 download.file(myurl, "activity.zip", method = "curl")
@@ -23,22 +25,39 @@ raw_df <- read.csv("activity.csv")
 
 ## What is mean total number of steps taken per day?
 
+To initially explore the mean number of steps per day, I aggregated by summing the number of steps over each individual date. I produced a histogram **Figure1** showing the distribution of steps taken.  
+
+
+
 
 ```r
 library(ggplot2)
 daily_sum <- setNames(aggregate(raw_df$steps, list(raw_df$date), sum), c("date", 
     "steps"))
+
 m <- ggplot(daily_sum, aes(x = steps))
 
-m + geom_histogram(colour = "White", fill = "steelblue", binwidth = 1000) + 
-    scale_y_continuous(breaks = seq(0, 10)) + ylab("Number of Days") + xlab("Steps Taken") + 
-    ggtitle("Histogram of total daily steps\n2012-10-01 to 2012-11-30") + theme(plot.title = element_text(lineheight = 1, 
-    face = "bold"))
+m + geom_histogram(colour = "White", fill = "steelblue", binwidth = 500) + scale_y_continuous(breaks = seq(0, 
+    10)) + ylab("Number of Days") + xlab("Steps Taken") + ggtitle("Figure 1. Histogram of total daily steps\n2012-10-01 to 2012-11-30") + 
+    theme(plot.title = element_text(lineheight = 1, face = "bold")) + annotate("text", 
+    x = 15000, y = 6.75, color = "blue", label = paste("Mean:", round(mean(daily_sum$steps, 
+        na.rm = TRUE), 0), " steps")) + 
+annotate("text", x = 15200, y = 6.25, color = "black", label = paste("Median:", 
+    round(median(daily_sum$steps, na.rm = TRUE), 0), " steps")) + 
+# add a vertical line at mean and median as caclulated
+geom_segment(aes(x = mean(daily_sum$steps, na.rm = TRUE), y = 6.5, xend = mean(daily_sum$steps, 
+    na.rm = TRUE) + 1000, yend = 6.5)) + 
+geom_vline(xintercept = mean(daily_sum$steps, na.rm = TRUE), color = "blue", 
+    size = 1.1) + geom_vline(xintercept = median(daily_sum$steps, na.rm = TRUE), 
+    color = "black", linetype = "dashed", size = 1.1)
 ```
 
 ![plot of chunk unnamed-chunk-2](figure/unnamed-chunk-2.png) 
 
 ```r
+
+
+
 
 mean(daily_sum$steps, na.rm = TRUE)
 ```
@@ -61,127 +80,107 @@ median(daily_sum$steps, na.rm = TRUE)
 
 
 
+
 ## What is the average daily activity pattern?
+
+To continue to explore the data, I aggregated the mean number of steps taken per 5 minute interval **Figure 2** to explore the fluctuation throughout an average day. 
 
 
 ```r
 avg_steps_per_interval <- setNames(aggregate(raw_df$steps, list(raw_df$interval), 
     mean, na.rm = TRUE), c("interval", "steps"))
 
+# the initial time data was of the form 0800, created labels to display as
+# 08:00
 pretty_labels <- paste(substr(sprintf("%04d", seq(0, 2400, by = 300)), 1, 2), 
     ":", substr(sprintf("%04d", seq(0, 2400, by = 300)), 3, 5), sep = "")
 
 
 ggplot(data = avg_steps_per_interval, aes(x = interval, y = steps)) + geom_line() + 
     scale_x_discrete(breaks = seq(0, 2400, by = 300), labels = pretty_labels) + 
-    ylab("Average Steps Taken") + xlab("Time of Day") + ggtitle("Average total steps at 5 minute intervals throughout day\n\n          2012-10-01 to 2012-11-30") + 
-    theme(plot.title = element_text(lineheight = 1, face = "bold"))
+    ylab("Average Steps Taken") + xlab("Time of Day") + ggtitle("Figure 2. Average total steps at 5 minute intervals\n \n          throughout day 2012-10-01 to 2012-11-30") + 
+    theme(plot.title = element_text(lineheight = 1, face = "bold")) + # add line to show peak activity
+geom_vline(color = "steelblue", xintercept = avg_steps_per_interval$interval[which.max(avg_steps_per_interval$steps)])
 ```
 
 ![plot of chunk unnamed-chunk-3](figure/unnamed-chunk-3.png) 
 
 ```r
 
-
 max_steps_time <- avg_steps_per_interval$interval[which.max(avg_steps_per_interval$steps)]
-max_steps_time
+
+# print out max_steps_time in nice format
+paste(substr(sprintf("%04d", max_steps_time), 1, 2), ":", substr(sprintf("%04d", 
+    max_steps_time), 3, 5), sep = "")
 ```
 
 ```
-## [1] 835
+## [1] "08:35"
 ```
 
 
 
 ## Imputing missing values
 
+I noticed that missing data seemed to be always for full days. Based on this observation, I decided to use the average of the 5 minute interval for each weekday in the available data as my imputed values for the missing data. 
+
+Using a new data frame with NA values replaced with the imputed value, I recreated the histogram **Figure 3** and found the new mean of the steps taken to be 10821 steps, and the median has shifted to 11015 steps.
+
+
 ```r
-table(aggregate(raw_df$steps, list(raw_df$date), function(x) sum(!is.na(x))))
+# it looks like maybe NA values are complete days of missing data check by
+# aggregating steps over each date and counting NAs
+na_by_date <- aggregate(raw_df$steps, list(raw_df$date), function(x) sum(is.na(x)))
+
+# 288 NAs equals full day of missing data
+sum(na_by_date$x == 288)
 ```
 
 ```
-##             x
-## Group.1      0 288
-##   2012-10-01 1   0
-##   2012-10-02 0   1
-##   2012-10-03 0   1
-##   2012-10-04 0   1
-##   2012-10-05 0   1
-##   2012-10-06 0   1
-##   2012-10-07 0   1
-##   2012-10-08 1   0
-##   2012-10-09 0   1
-##   2012-10-10 0   1
-##   2012-10-11 0   1
-##   2012-10-12 0   1
-##   2012-10-13 0   1
-##   2012-10-14 0   1
-##   2012-10-15 0   1
-##   2012-10-16 0   1
-##   2012-10-17 0   1
-##   2012-10-18 0   1
-##   2012-10-19 0   1
-##   2012-10-20 0   1
-##   2012-10-21 0   1
-##   2012-10-22 0   1
-##   2012-10-23 0   1
-##   2012-10-24 0   1
-##   2012-10-25 0   1
-##   2012-10-26 0   1
-##   2012-10-27 0   1
-##   2012-10-28 0   1
-##   2012-10-29 0   1
-##   2012-10-30 0   1
-##   2012-10-31 0   1
-##   2012-11-01 1   0
-##   2012-11-02 0   1
-##   2012-11-03 0   1
-##   2012-11-04 1   0
-##   2012-11-05 0   1
-##   2012-11-06 0   1
-##   2012-11-07 0   1
-##   2012-11-08 0   1
-##   2012-11-09 1   0
-##   2012-11-10 1   0
-##   2012-11-11 0   1
-##   2012-11-12 0   1
-##   2012-11-13 0   1
-##   2012-11-14 1   0
-##   2012-11-15 0   1
-##   2012-11-16 0   1
-##   2012-11-17 0   1
-##   2012-11-18 0   1
-##   2012-11-19 0   1
-##   2012-11-20 0   1
-##   2012-11-21 0   1
-##   2012-11-22 0   1
-##   2012-11-23 0   1
-##   2012-11-24 0   1
-##   2012-11-25 0   1
-##   2012-11-26 0   1
-##   2012-11-27 0   1
-##   2012-11-28 0   1
-##   2012-11-29 0   1
-##   2012-11-30 1   0
+## [1] 8
 ```
 
 ```r
-raw_df$day_of_week <- weekdays(as.POSIXlt(raw_df$date))
+# check to make sure no days have less than 288 NAs
+sum(na_by_date$x < 288 & na_by_date$x > 0)
+```
+
+```
+## [1] 0
+```
+
+```r
+
+# based on NAs being confined to complete days I decided to use average for
+# each interval for each day to fill in missing values, assumption being
+# that activities on each individual weekday are similar
 library(plyr)
+# get the weekdays from the date field to aggregate
+raw_df$day_of_week <- weekdays(as.POSIXlt(raw_df$date))
+
+# store the row number as id for re-sorting after manipulation
 raw_df$id <- as.numeric(rownames(raw_df))
+
+# function to replace missing values with mean
 impute.mean <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
+# use impute.mean function to aggregate over each interval, day of week
+# group
 fill_means_for_day <- ddply(raw_df, .(day_of_week, interval), transform, steps = impute.mean(steps))
 
-
+# re-order like original data frame
 fill_means_for_day <- fill_means_for_day[order(fill_means_for_day$id), ]
+
+# redo sums for each date using new data frame with filled in NAs
 imputed_sums <- setNames(aggregate(fill_means_for_day$steps, list(raw_df$date), 
     sum), c("date", "steps"))
+
+# plot using same format as initial histogram
 m <- ggplot(imputed_sums, aes(x = steps))
 m + geom_histogram(colour = "White", fill = "blue", binwidth = 1000) + scale_y_continuous(breaks = seq(0, 
     10)) + ylab("Number of Days") + xlab("Steps Taken") + annotate("text", x = 18000, 
     y = 8, label = "NA values replaced\nwith weekday interval\n average") + 
-    ggtitle("Histogram of total daily steps\n2012-10-01 to 2012-11-30") + theme(plot.title = element_text(lineheight = 1, 
-    face = "bold"))
+    ggtitle("Figure 3. Histogram of total daily steps\n2012-10-01 to 2012-11-30") + 
+    theme(plot.title = element_text(lineheight = 1, face = "bold"))
 ```
 
 ![plot of chunk unnamed-chunk-4](figure/unnamed-chunk-4.png) 
@@ -207,6 +206,8 @@ median(imputed_sums$steps)
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+I looked at the difference in activity patterns between Weekends and Weekdays using the data frame with imputed values for missing data **Figure 4**. There seems to be higher activity levels between approximately 5:00 and 8:30 and then drops off with little activity after 19:00. On weekends the activity level seems to start climbing slightly later in the day between approximately 7:00 and 9:00 , is fairly constant thoughout the day, and tapers off later in the day at around 21:00. 
 
 
 ```r
